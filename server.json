@@ -1,0 +1,31 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Nomad07/nftdata-mcp",
+  "description": "OpenSea NFT collection market data (floor, volume, sales, owners, supply) via the NFT Data API, paid per call with x402.",
+  "repository": {
+    "url": "https://github.com/Nomad07/nft-data",
+    "source": "github"
+  },
+  "version": "1.0.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "nftdata-mcp",
+      "version": "1.0.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "EVM_PRIVATE_KEY",
+          "description": "Private key of a dedicated wallet holding a small amount of USDC on Base. Pays $0.002 per request via x402.",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "NFTDATA_MAX_REQUESTS",
+          "description": "Maximum paid requests per session (default 100).",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}
