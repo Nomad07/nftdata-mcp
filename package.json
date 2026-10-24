@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Nomad07/nft-data.git"
+    "url": "https://github.com/Nomad07/nftdata-mcp.git"
   },
   "bin": {
     "nftdata-mcp": "dist/server.js"

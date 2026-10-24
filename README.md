@@ -41,6 +41,8 @@ No cloning required. Add to `claude_desktop_config.json`:
 }
 ```
 
+Restart Claude Desktop, then ask for example: "What is the floor price and 7-day volume of azuki?"
+
 If the package is published under a scope, use that name instead (e.g. `@your-scope/nftdata-mcp`).
 
 ## Run from source
@@ -57,8 +59,6 @@ To use a local checkout with Claude Desktop, point `args` to `["tsx", "/absolute
 ```bash
 npm run build   # compiles server.ts to dist/server.js
 ```
-
-Restart Claude Desktop, then ask for example: "What is the floor price and 7-day volume of azuki?"
 
 ## Configuration
 

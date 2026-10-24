@@ -3,7 +3,7 @@
   "name": "io.github.Nomad07/nftdata-mcp",
   "description": "OpenSea NFT collection market data (floor, volume, sales, owners, supply) via the NFT Data API, paid per call with x402.",
   "repository": {
-    "url": "https://github.com/Nomad07/nft-data",
+    "url": "https://github.com/Nomad07/nftdata-mcp",
     "source": "github"
   },
   "version": "1.0.0",
