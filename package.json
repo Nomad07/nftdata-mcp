@@ -22,7 +22,7 @@
   "scripts": {
     "build": "tsc",
     "start": "tsx server.ts",
-    "test": "tsx --test test/lib.test.ts",
+    "test": "tsx --test lib.test.ts",
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {

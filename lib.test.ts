@@ -4,6 +4,7 @@ import {
   BASE_MAINNET,
   CACHE_TTL_MS,
   CachedFetcher,
+  EXACT_AMOUNT_ATOMIC,
   OFFICIAL_ENDPOINT,
   OFFICIAL_PAY_TO,
   REFUSAL_PREFIX,
@@ -20,7 +21,7 @@ import {
   resolveEndpoint,
   validateRequirements,
   withTimeout,
-} from "../lib.js";
+} from "./lib.js";
 
 const PAYTO = OFFICIAL_PAY_TO;
 const goodReq = () => ({
@@ -93,7 +94,7 @@ test("private key shape check never throws and accepts only 0x+64 hex", () => {
 // ---- payment challenge validation
 test("accepts the expected Base USDC challenge", () => {
   assert.equal(validateRequirements(goodReq()), null);
-  assert.equal(validateRequirements({ ...goodReq(), amount: "1" }), null);
+  // Case-insensitive asset address is accepted when the amount is exactly 2000.
   assert.equal(validateRequirements({ ...goodReq(), asset: USDC_BASE.toLowerCase() }), null);
 });
 test("refuses wrong network, scheme, token, amount", () => {
@@ -102,8 +103,13 @@ test("refuses wrong network, scheme, token, amount", () => {
   assert.match(validateRequirements({ ...goodReq(), network: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" })!, /network/);
   assert.match(validateRequirements({ ...goodReq(), scheme: "upto" })!, /scheme/);
   assert.match(validateRequirements({ ...goodReq(), asset: "0x" + "11".repeat(20) })!, /token/);
-  assert.match(validateRequirements({ ...goodReq(), amount: "2001" })!, /above/);
-  assert.match(validateRequirements({ ...goodReq(), amount: "10000" })!, /above/);
+  // Any amount other than exactly 2000 is refused.
+  assert.match(validateRequirements({ ...goodReq(), amount: "2001" })!, /does not match/);
+  assert.match(validateRequirements({ ...goodReq(), amount: "10000" })!, /does not match/);
+  assert.match(validateRequirements({ ...goodReq(), amount: "1999" })!, /does not match/);
+  assert.match(validateRequirements({ ...goodReq(), amount: "1" })!, /does not match/);
+  assert.match(validateRequirements({ ...goodReq(), amount: "0" })!, /does not match/);
+  // Malformed amount strings are caught before the value comparison.
   for (const a of ["-1", "1.5", "", "0x10", "1e3", " 5"]) {
     assert.match(validateRequirements({ ...goodReq(), amount: a })!, /invalid payment amount/, a);
   }
@@ -196,4 +202,81 @@ test("mapResponse handles 200/400/404/429/402/other", () => {
   assert.match(mapResponse(429, "", "<script>").content[0].text, /a few seconds/);
   assert.match(mapResponse(402, "payTo 0xabc", null).content[0].text, /not accepted/);
   assert.doesNotMatch(mapResponse(500, "stack trace", null).content[0].text, /stack/);
+});
+
+// ---- validateRequirements: exact amount enforcement
+// The API price is fixed at $0.002 = 2000 atomic units of Base USDC.
+// Only the challenge amount "2000" is accepted; everything else is refused.
+test("validateRequirements: only exact amount 2000 is accepted", () => {
+  // The four boundary values specified in the task:
+  assert.match(validateRequirements({ ...goodReq(), amount: "0" })!,    /does not match/);
+  assert.match(validateRequirements({ ...goodReq(), amount: "1999" })!, /does not match/);
+  assert.equal(validateRequirements({ ...goodReq(), amount: "2000" }), null);   // only passing value
+  assert.match(validateRequirements({ ...goodReq(), amount: "2001" })!, /does not match/);
+  // Additional values that must be refused.
+  assert.match(validateRequirements({ ...goodReq(), amount: "1" })!,    /does not match/);
+  assert.match(validateRequirements({ ...goodReq(), amount: "10000" })!, /does not match/);
+  // EXACT_AMOUNT_ATOMIC is 2000n; verify the constant is still 2000.
+  assert.equal(EXACT_AMOUNT_ATOMIC, 2000n);
+  // Malformed strings are caught by the format check before the value comparison.
+  for (const a of [" 2000", "2000 ", "2000.0", "-1", "0x7D0", "2e3"]) {
+    assert.match(validateRequirements({ ...goodReq(), amount: a })!, /invalid payment amount/,
+      `expected format rejection for amount=${JSON.stringify(a)}`);
+  }
+});
+
+// ---- SpendLimiter: release does not go below zero
+test("SpendLimiter: release is a no-op when already at zero", () => {
+  const l = new SpendLimiter(3);
+  l.release(); // should not throw or underflow
+  assert.equal(l.used, 0);
+  assert.equal(l.tryReserve(), true); // still works normally after spurious release
+  assert.equal(l.used, 1);
+});
+
+// ---- hook abort propagation: error message carries the REFUSAL_PREFIX
+test("onBeforePaymentCreation abort produces error text that mapError can extract", () => {
+  // Simulate what the SDK does when a hook returns { abort: true, reason: "..." }:
+  //   throw new Error(`Payment creation aborted: ${result.reason}`)
+  // Verify mapError recognises the REFUSAL_PREFIX embedded in that message.
+  const reason = `${REFUSAL_PREFIX}unexpected payment network`;
+  const thrown = new Error(`Payment creation aborted: ${reason}`);
+  const result = mapError(thrown);
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /unexpected payment network/);
+  // Must not leak the raw SDK error wrapper text
+  assert.doesNotMatch(result.content[0].text, /Payment creation aborted/);
+});
+
+test("onBeforePaymentCreation abort for limit reached produces extractable message", () => {
+  const reason = `${REFUSAL_PREFIX}paid request limit (100) for this session reached`;
+  const thrown = new Error(`Payment creation aborted: ${reason}`);
+  const result = mapError(thrown);
+  assert.equal(result.isError, true);
+  assert.match(result.content[0].text, /paid request limit/);
+  assert.match(result.content[0].text, /100/);
+});
+
+// ---- PaymentCreationContext field names match validateRequirements interface
+// The SDK's PaymentRequirements type has: scheme, network, asset, amount, payTo.
+// validateRequirements reads exactly those field names.  This test confirms the
+// mapping is correct by constructing an object identical in shape to what the
+// SDK passes as ctx.selectedRequirements and verifying the validator accepts it.
+test("validateRequirements field names match the SDK PaymentRequirements shape", () => {
+  // Construct with the same field names the SDK uses (confirmed from type definitions).
+  const sdkStyleReq = {
+    scheme: "exact",
+    network: BASE_MAINNET as `${string}:${string}`,
+    asset: USDC_BASE,
+    amount: "2000",
+    payTo: OFFICIAL_PAY_TO,
+    maxTimeoutSeconds: 60,                  // extra SDK field not read by validator
+    extra: {} as Record<string, unknown>,   // extra SDK field not read by validator
+  };
+  assert.equal(validateRequirements(sdkStyleReq), null);
+  // Wrong network via the same shape
+  assert.match(
+    validateRequirements({ ...sdkStyleReq, network: "eip155:1" as `${string}:${string}` })!,
+    /network/,
+  );
 });

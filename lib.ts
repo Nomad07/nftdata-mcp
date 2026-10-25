@@ -4,10 +4,10 @@
 export const OFFICIAL_ENDPOINT = "https://www.nftdata.app/api/get-collection-data";
 const ALLOWED_ENDPOINTS = new Set([OFFICIAL_ENDPOINT, "https://nftdata.app/api/get-collection-data"]);
 
-// Base mainnet, USDC (6 decimals). Price is $0.002 = 2000 atomic units.
+// Base mainnet, USDC (6 decimals). Price is $0.002 = exactly 2000 atomic units.
 export const BASE_MAINNET = "eip155:8453";
 export const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-export const MAX_AMOUNT_ATOMIC = 2000n;
+export const EXACT_AMOUNT_ATOMIC = 2000n;
 
 // Official NFT Data payment recipient on Base (lowercase for comparison).
 export const OFFICIAL_PAY_TO = "0x344143199642e87320785823c20c2df107d17534";
@@ -95,7 +95,7 @@ export function validateRequirements(req: Requirements): string | null {
     return "unexpected payment token";
   }
   if (typeof req.amount !== "string" || !/^\d+$/.test(req.amount)) return "invalid payment amount";
-  if (BigInt(req.amount) > MAX_AMOUNT_ATOMIC) return "payment amount above the expected price";
+  if (BigInt(req.amount) !== EXACT_AMOUNT_ATOMIC) return "payment amount does not match the expected price";
   if (typeof req.payTo !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(req.payTo)) {
     return "invalid payment recipient";
   }

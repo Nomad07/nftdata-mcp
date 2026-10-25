@@ -49,14 +49,22 @@ try {
 const limiter = new SpendLimiter(config.maxRequests);
 
 // Only Base mainnet is registered (no "eip155:*" wildcard), so challenges for other
-// EVM networks cannot be signed. The hook below re-checks every challenge before signing.
+// EVM networks are rejected before this hook runs: selectPaymentRequirements throws
+// when no registered network/scheme matches, so the hook only fires for eip155:8453.
+// The hook re-checks the selected requirements against our policy before signing.
+//
+// ctx.selectedRequirements is the SDK's PaymentRequirements type:
+//   { scheme, network, asset, amount, payTo, maxTimeoutSeconds, extra }
+// validateRequirements reads scheme/network/asset/amount/payTo — matching that shape.
 const client = new x402Client();
 client.register(BASE_MAINNET, new ExactEvmScheme(account));
 
 client
   .onBeforePaymentCreation(async (ctx) => {
+    // Validate all four payment fields before the wallet signs anything.
     const reason = validateRequirements(ctx.selectedRequirements);
     if (reason) return { abort: true, reason: `${REFUSAL_PREFIX}${reason}` };
+    // Reserve a slot against the per-session payment limit.
     if (!limiter.tryReserve()) {
       return {
         abort: true,
@@ -65,8 +73,13 @@ client
     }
   })
   .onPaymentCreationFailure(async () => {
+    // Signing failed after the slot was reserved; release it so the counter stays accurate.
     limiter.release();
   });
+// onPaymentResponse is intentionally NOT registered.  The SDK uses it to drive a
+// recovery-retry path (wrapFetchWithPayment calls createPaymentPayload a second time
+// when a hook returns { recovered: true }).  Leaving it unregistered ensures at most
+// one payment-creation attempt per tool call, which is this server's "no retries" policy.
 
 const payFetch = wrapFetchWithPayment(fetch, client);
 
