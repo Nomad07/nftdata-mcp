@@ -12,17 +12,23 @@
   "bin": {
     "nftdata-mcp": "dist/server.js"
   },
-  "files": ["dist", "README.md"],
-  "engines": { "node": ">=20" },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc",
     "start": "tsx server.ts",
-    "prepublishOnly": "npm run build"
+    "test": "tsx --test test/lib.test.ts",
+    "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@x402/evm": "latest",
-    "@x402/fetch": "latest",
+    "@x402/evm": "^2.5.0",
+    "@x402/fetch": "^2.5.0",
     "viem": "^2.0.0",
     "zod": "^3.23.0"
   },

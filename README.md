@@ -25,7 +25,9 @@ Each call costs **$0.002** (USDC on Base, paid via x402).
 
 ## Quick start (npx)
 
-No cloning required. Add to `claude_desktop_config.json`:
+> Works only after the package has been published to npm. Until then, use "Run from source" below.
+
+Add to `claude_desktop_config.json`:
 
 ```json
 {
@@ -49,36 +51,63 @@ If the package is published under a scope, use that name instead (e.g. `@your-sc
 
 ```bash
 npm install
-EVM_PRIVATE_KEY=0x... npm start
 ```
+
+Set the key for the current shell session only, then start:
+
+```bash
+# macOS / Linux
+export EVM_PRIVATE_KEY=0x...
+npm start
+```
+
+```powershell
+# Windows PowerShell
+$env:EVM_PRIVATE_KEY = "0x..."
+npm start
+```
+
+```bat
+:: Windows cmd
+set EVM_PRIVATE_KEY=0x...
+npm start
+```
+
+The server waits for an MCP client on stdin, so running it by hand just shows no output; it is meant to be launched by an MCP client.
 
 To use a local checkout with Claude Desktop, point `args` to `["tsx", "/absolute/path/to/nftdata-mcp/server.ts"]` with `"command": "npx"`.
 
 ## Build
 
 ```bash
-npm run build   # compiles server.ts to dist/server.js
+npm run build   # compiles server.ts and lib.ts to dist/
+npm test        # offline unit tests, no network and no payments
 ```
 
 ## Configuration
 
-| Variable                | Required | Default                                            | Description                                   |
-|-------------------------|----------|----------------------------------------------------|-----------------------------------------------|
-| `EVM_PRIVATE_KEY`       | yes      | –                                                  | Private key of the wallet that pays for calls |
-| `NFTDATA_MAX_REQUESTS`  | no       | `100`                                              | Max paid requests per session                 |
-| `NFTDATA_URL`           | no       | `https://www.nftdata.app/api/get-collection-data`  | Override the API endpoint                     |
+| Variable               | Required | Default | Description |
+|------------------------|----------|---------|-------------|
+| `EVM_PRIVATE_KEY`      | yes      | –       | Private key (`0x` + 64 hex chars) of the wallet that pays for calls |
+| `NFTDATA_MAX_REQUESTS` | no       | `100`   | Max signed payments per session. Integer 1–1000; any other value stops startup with an error |
+| `NFTDATA_TIMEOUT_MS`   | no       | `15000` | Request timeout in milliseconds (1000–60000) |
+| `NFTDATA_URL`          | no       | `https://www.nftdata.app/api/get-collection-data` | Accepts only the official NFT Data endpoint (`www.nftdata.app` or `nftdata.app`); anything else stops startup |
 
 ## Behavior
 
 - Sends `POST /api/get-collection-data` with body `{"collection": "<slug>"}`.
-- On `402 Payment Required`, signs an x402 payment (Base, USDC) and retries.
-- Caches responses for 5 minutes per slug to avoid paying twice.
-- Stops after `NFTDATA_MAX_REQUESTS` paid calls per session.
-- Returns clear errors for `400` (invalid slug), `404` (collection not found) and `429` (rate limit, with `Retry-After`).
+- The slug is trimmed and lowercased, then must match `^[a-z0-9][a-z0-9_-]*$` (max 100 characters); otherwise no request is made.
+- Only Base mainnet (`eip155:8453`) is registered with the x402 client. Before signing, every payment challenge is checked: scheme `exact`, network Base mainnet, token USDC on Base, amount at most 2000 units ($0.002), and recipient (must be `0x344143199642e87320785823c20c2df107d17534`). Anything else is refused without signing.
+- Each signed payment counts against `NFTDATA_MAX_REQUESTS`, including payments for requests that later fail or time out.
+- No automatic retries: one tool call makes at most one payment attempt.
+- Caches successful responses for 5 minutes per slug. Concurrent identical calls share a single in-flight request.
+- Returns generic errors for `400` (invalid slug), `404` (collection not found), `429` (rate limit, with `Retry-After`), timeouts and other failures; server and payment details are not passed to the MCP client.
 
 ## Limitations
 
 - Only x402 on Base is supported. Solana and MPP payment methods are not implemented in this wrapper.
+- The expected recipient address is hardcoded in `lib.ts`. If the NFT Data payout address ever changes, update `OFFICIAL_PAY_TO` and release a new version.
+- The payment hook (`server.ts`) depends on the installed `@x402/*` SDK and is not covered by the offline tests.
 - The x402 client libraries change quickly; if imports fail, check the current [x402 docs](https://docs.x402.org/).
 
 ## API reference

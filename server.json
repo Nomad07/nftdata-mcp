@@ -12,7 +12,9 @@
       "registryType": "npm",
       "identifier": "nftdata-mcp",
       "version": "1.0.0",
-      "transport": { "type": "stdio" },
+      "transport": {
+        "type": "stdio"
+      },
       "environmentVariables": [
         {
           "name": "EVM_PRIVATE_KEY",
@@ -22,7 +24,7 @@
         },
         {
           "name": "NFTDATA_MAX_REQUESTS",
-          "description": "Maximum paid requests per session (default 100).",
+          "description": "Maximum signed payments per session (integer 1-1000, default 100).",
           "isRequired": false
         }
       ]
