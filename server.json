@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Nomad07/nftdata-mcp",
-  "description": "OpenSea NFT collection market data (floor, volume, sales, owners, supply) via the NFT Data API, paid per call with x402.",
+  "description": "OpenSea NFT collection data via NFT Data API, paid per request with x402.",
   "repository": {
     "url": "https://github.com/Nomad07/nftdata-mcp",
     "source": "github"
