@@ -2,6 +2,9 @@
 
 An MCP server that exposes the [NFT Data](https://www.nftdata.app/) API to AI clients (Claude Desktop, Cursor, etc.) as a single tool. It handles the x402 payment flow automatically.
 
+- **npm:** https://www.npmjs.com/package/nftdata-mcp
+- **MCP Registry:** https://registry.modelcontextprotocol.io/?q=nftdata
+
 ## Tool
 
 ### `get_collection_data`
@@ -25,8 +28,6 @@ Each call costs **$0.002** (USDC on Base, paid via x402).
 
 ## Quick start (npx)
 
-> Works only after the package has been published to npm. Until then, use "Run from source" below.
-
 Add to `claude_desktop_config.json`:
 
 ```json
@@ -44,8 +45,6 @@ Add to `claude_desktop_config.json`:
 ```
 
 Restart Claude Desktop, then ask for example: "What is the floor price and 7-day volume of azuki?"
-
-If the package is published under a scope, use that name instead (e.g. `@your-scope/nftdata-mcp`).
 
 ## Run from source
 
@@ -97,7 +96,7 @@ npm test        # offline unit tests, no network and no payments
 
 - Sends `POST /api/get-collection-data` with body `{"collection": "<slug>"}`.
 - The slug is trimmed and lowercased, then must match `^[a-z0-9][a-z0-9_-]*$` (max 100 characters); otherwise no request is made.
-- Only Base mainnet (`eip155:8453`) is registered with the x402 client. Before signing, every payment challenge is checked: scheme `exact`, network Base mainnet, token USDC on Base, amount at most 2000 units ($0.002), and recipient (must be `0x344143199642e87320785823c20c2df107d17534`). Anything else is refused without signing.
+- Only Base mainnet (`eip155:8453`) is registered with the x402 client. Before signing, every payment challenge is checked: scheme `exact`, network Base mainnet, token USDC on Base, amount exactly 2000 atomic units ($0.002), and recipient (must be `0x344143199642e87320785823c20c2df107d17534`). Anything else is refused without signing.
 - Each signed payment counts against `NFTDATA_MAX_REQUESTS`, including payments for requests that later fail or time out.
 - No automatic retries: one tool call makes at most one payment attempt.
 - Caches successful responses for 5 minutes per slug. Concurrent identical calls share a single in-flight request.
