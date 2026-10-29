@@ -4,6 +4,7 @@ An MCP server that exposes the [NFT Data](https://www.nftdata.app/) API to AI cl
 
 - **npm:** https://www.npmjs.com/package/nftdata-mcp
 - **MCP Registry:** https://registry.modelcontextprotocol.io/?q=nftdata
+- **NFT Data GitHub Repository:** https://github.com/Nomad07/nft-data
 
 ## Tool
 
