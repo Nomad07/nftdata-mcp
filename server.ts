@@ -2,7 +2,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { x402Client, wrapFetchWithPayment } from "@x402/fetch";
+import { x402Client, wrapFetchWithPayment, decodePaymentResponseHeader } from "@x402/fetch";
 import { ExactEvmScheme } from "@x402/evm/exact/client";
 import { privateKeyToAccount } from "viem/accounts";
 import {
@@ -10,6 +10,7 @@ import {
   CachedFetcher,
   REFUSAL_PREFIX,
   SpendLimiter,
+  appendPaymentInfo,
   fail,
   isValidPrivateKey,
   mapError,
@@ -17,8 +18,10 @@ import {
   normalizeSlug,
   parseConfig,
   validateRequirements,
+  validateTxHash,
   withTimeout,
   type Config,
+  type LoadResult,
 } from "./lib.js";
 
 let config: Config;
@@ -83,7 +86,7 @@ client
 
 const payFetch = wrapFetchWithPayment(fetch, client);
 
-async function load(slug: string) {
+async function load(slug: string): Promise<LoadResult> {
   try {
     // No automatic retries: one tool call is at most one payment attempt.
     const res = await withTimeout(
@@ -95,13 +98,34 @@ async function load(slug: string) {
           redirect: "error",
           signal,
         });
-        return { status: r.status, body: await r.text(), retryAfter: r.headers.get("Retry-After") };
+        // Extract the payment response header before consuming the body.
+        const paymentHeader =
+          r.headers.get("PAYMENT-RESPONSE") ?? r.headers.get("X-PAYMENT-RESPONSE");
+        return {
+          status: r.status,
+          body: await r.text(),
+          retryAfter: r.headers.get("Retry-After"),
+          paymentHeader,
+        };
       },
       config.timeoutMs,
     );
-    return mapResponse(res.status, res.body, res.retryAfter);
+    const result = mapResponse(res.status, res.body, res.retryAfter);
+    // Decode the payment header and extract the tx hash only on success.
+    // Any failure (malformed header, missing field, wrong format) is silently
+    // ignored — the collection result is still returned without payment info.
+    let txHash: string | null = null;
+    if (!result.isError && res.paymentHeader) {
+      try {
+        const settle = decodePaymentResponseHeader(res.paymentHeader);
+        txHash = validateTxHash(settle.transaction);
+      } catch {
+        // Malformed header: proceed without payment info.
+      }
+    }
+    return { result, txHash };
   } catch (e) {
-    return mapError(e);
+    return { result: mapError(e), txHash: null };
   }
 }
 
@@ -125,7 +149,8 @@ server.tool(
     if (slug === null) {
       return fail("Invalid slug: use only letters, digits, '_' and '-' (max 100 characters).");
     }
-    return fetcher.get(slug);
+    const { result, txHash } = await fetcher.get(slug);
+    return txHash ? appendPaymentInfo(result, txHash) : result;
   },
 );
 

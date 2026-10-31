@@ -128,35 +128,62 @@ export type ToolResult = { isError?: boolean; content: { type: "text"; text: str
 export const ok = (text: string): ToolResult => ({ content: [{ type: "text", text }] });
 export const fail = (text: string): ToolResult => ({ isError: true, content: [{ type: "text", text }] });
 
+// Appends a payment receipt line to a successful tool result.
+// txHash must already be validated (0x + 64 hex chars).
+export function appendPaymentInfo(result: ToolResult, txHash: string): ToolResult {
+  if (result.isError) return result;
+  const receipt =
+    `\n\nPayment: ${txHash}` +
+    `\nVerify: https://basescan.org/tx/${txHash}`;
+  return ok(result.content[0].text + receipt);
+}
+
+// Validates a tx hash string. Returns the hash if it looks like a valid
+// Ethereum tx hash (0x + 64 hex chars), or null otherwise.
+// This function has no x402 imports so it can be tested offline.
+export function validateTxHash(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  return /^0x[0-9a-fA-F]{64}$/.test(raw) ? raw : null;
+}
+
+export interface LoadResult {
+  result: ToolResult;
+  // Present only on a live (non-cached) successful fetch. Never set on cache hits
+  // so stale transaction hashes are never returned.
+  txHash: string | null;
+}
+
 // Cache (5 min per slug) + reuse of in-flight requests so concurrent identical calls
 // produce a single (paid) request. Failures are never cached.
+// The loader returns { result, txHash }. Only result.content[0].text (the collection
+// body) is cached; txHash is never stored, so cache hits always return txHash: null.
 export class CachedFetcher {
   private cache = new Map<string, { at: number; body: string }>();
-  private inflight = new Map<string, Promise<ToolResult>>();
-  private readonly load: (slug: string) => Promise<ToolResult>;
+  private inflight = new Map<string, Promise<LoadResult>>();
+  private readonly load: (slug: string) => Promise<LoadResult>;
   private readonly now: () => number;
-  constructor(load: (slug: string) => Promise<ToolResult>, now: () => number = Date.now) {
+  constructor(load: (slug: string) => Promise<LoadResult>, now: () => number = Date.now) {
     this.load = load;
     this.now = now;
   }
-  async get(slug: string): Promise<ToolResult> {
+  async get(slug: string): Promise<LoadResult> {
     const hit = this.cache.get(slug);
-    if (hit && this.now() - hit.at < CACHE_TTL_MS) return ok(hit.body);
+    if (hit && this.now() - hit.at < CACHE_TTL_MS) return { result: ok(hit.body), txHash: null };
     if (hit) this.cache.delete(slug);
 
     const pending = this.inflight.get(slug);
     if (pending) return pending;
 
     const p = this.load(slug)
-      .then((res) => {
-        if (!res.isError) {
+      .then((lr) => {
+        if (!lr.result.isError) {
           if (this.cache.size >= CACHE_MAX_ENTRIES) {
             const oldest = this.cache.keys().next().value;
             if (oldest !== undefined) this.cache.delete(oldest);
           }
-          this.cache.set(slug, { at: this.now(), body: res.content[0].text });
+          this.cache.set(slug, { at: this.now(), body: lr.result.content[0].text });
         }
-        return res;
+        return lr;
       })
       .finally(() => {
         this.inflight.delete(slug);

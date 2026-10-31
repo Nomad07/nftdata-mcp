@@ -11,6 +11,7 @@ import {
   SpendLimiter,
   TimeoutError,
   USDC_BASE,
+  appendPaymentInfo,
   fail,
   isValidPrivateKey,
   mapError,
@@ -20,7 +21,9 @@ import {
   parseConfig,
   resolveEndpoint,
   validateRequirements,
+  validateTxHash,
   withTimeout,
+  type LoadResult,
 } from "./lib.js";
 
 const PAYTO = OFFICIAL_PAY_TO;
@@ -134,23 +137,26 @@ test("SpendLimiter enforces the limit and supports release", () => {
 });
 
 // ---- cache + in-flight dedupe
+const lr = (result: ReturnType<typeof ok | typeof fail>, txHash: string | null = null): LoadResult =>
+  ({ result, txHash });
+
 test("cache returns the stored body within the TTL and reloads after it", async () => {
   let t = 0;
   let calls = 0;
-  const f = new CachedFetcher(async () => { calls++; return ok(`{"n":${calls}}`); }, () => t);
-  assert.equal((await f.get("azuki")).content[0].text, '{"n":1}');
+  const f = new CachedFetcher(async () => { calls++; return lr(ok(`{"n":${calls}}`), null); }, () => t);
+  assert.equal((await f.get("azuki")).result.content[0].text, '{"n":1}');
   t = CACHE_TTL_MS - 1;
-  assert.equal((await f.get("azuki")).content[0].text, '{"n":1}');
+  assert.equal((await f.get("azuki")).result.content[0].text, '{"n":1}');
   assert.equal(calls, 1);
   t = CACHE_TTL_MS + 1;
-  assert.equal((await f.get("azuki")).content[0].text, '{"n":2}');
+  assert.equal((await f.get("azuki")).result.content[0].text, '{"n":2}');
   assert.equal(calls, 2);
 });
 test("concurrent identical requests share one load (no duplicate paid request)", async () => {
   let calls = 0;
   let release!: () => void;
   const gate = new Promise<void>((r) => { release = r; });
-  const f = new CachedFetcher(async () => { calls++; await gate; return ok("{}"); });
+  const f = new CachedFetcher(async () => { calls++; await gate; return lr(ok("{}")); });
   const a = f.get("azuki");
   const b = f.get("azuki");
   const c = f.get("milady");
@@ -160,9 +166,9 @@ test("concurrent identical requests share one load (no duplicate paid request)",
 });
 test("failures are not cached and in-flight entry is cleared", async () => {
   let calls = 0;
-  const f = new CachedFetcher(async () => { calls++; return calls === 1 ? fail("x") : ok("{}"); });
-  assert.equal((await f.get("a")).isError, true);
-  assert.equal((await f.get("a")).isError, undefined);
+  const f = new CachedFetcher(async () => { calls++; return calls === 1 ? lr(fail("x")) : lr(ok("{}")); });
+  assert.equal((await f.get("a")).result.isError, true);
+  assert.equal((await f.get("a")).result.isError, undefined);
   assert.equal(calls, 2);
 });
 
@@ -279,4 +285,84 @@ test("validateRequirements field names match the SDK PaymentRequirements shape",
     validateRequirements({ ...sdkStyleReq, network: "eip155:1" as `${string}:${string}` })!,
     /network/,
   );
+});
+
+// ---- validateTxHash
+test("validateTxHash accepts a valid 0x+64-hex transaction hash", () => {
+  const hash = "0x" + "ab".repeat(32);
+  assert.equal(validateTxHash(hash), hash);
+  // Uppercase hex is also valid.
+  const upper = "0x" + "AB".repeat(32);
+  assert.equal(validateTxHash(upper), upper);
+});
+test("validateTxHash rejects invalid values", () => {
+  for (const bad of [
+    null, undefined, 42, "",
+    "0x" + "ab".repeat(31),          // too short
+    "0x" + "ab".repeat(33),          // too long
+    "ab".repeat(32),                  // missing 0x prefix
+    "0x" + "zz".repeat(32),          // non-hex chars
+    "0x" + "ab".repeat(32) + " ",   // trailing space
+  ]) {
+    assert.equal(validateTxHash(bad), null, `expected null for ${JSON.stringify(bad)}`);
+  }
+});
+
+// ---- appendPaymentInfo
+const FAKE_TX = "0x" + "1a".repeat(32);
+
+test("appendPaymentInfo appends tx hash and BaseScan link to a successful result", () => {
+  const base = ok('{"name":"azuki"}');
+  const enriched = appendPaymentInfo(base, FAKE_TX);
+  assert.equal(enriched.isError, undefined);
+  // Original JSON body is preserved at the start.
+  assert.ok(enriched.content[0].text.startsWith('{"name":"azuki"}'));
+  // Transaction hash appears in the output.
+  assert.ok(enriched.content[0].text.includes(FAKE_TX));
+  // BaseScan link is present.
+  assert.ok(enriched.content[0].text.includes(`https://basescan.org/tx/${FAKE_TX}`));
+});
+test("appendPaymentInfo is a no-op on error results", () => {
+  const err = fail("something went wrong");
+  const result = appendPaymentInfo(err, FAKE_TX);
+  // isError must be preserved; tx hash must not appear.
+  assert.equal(result.isError, true);
+  assert.ok(!result.content[0].text.includes(FAKE_TX));
+});
+
+// ---- CachedFetcher: tx hash isolation
+test("cache hit returns txHash: null even when the original load had a hash", async () => {
+  let calls = 0;
+  const f = new CachedFetcher(async () => {
+    calls++;
+    return { result: ok('{"name":"azuki"}'), txHash: FAKE_TX };
+  });
+  // First call — live fetch, hash is present.
+  const first = await f.get("azuki");
+  assert.equal(first.txHash, FAKE_TX);
+  assert.equal(calls, 1);
+  // Second call within TTL — cache hit, hash must be null.
+  const second = await f.get("azuki");
+  assert.equal(second.txHash, null, "cache hit must not return a stale tx hash");
+  assert.equal(second.result.content[0].text, '{"name":"azuki"}');
+  assert.equal(calls, 1); // no new load
+});
+test("cache does not store tx hash; reload after TTL also returns null until next live fetch", async () => {
+  let t = 0;
+  let calls = 0;
+  const f = new CachedFetcher(async () => {
+    calls++;
+    return { result: ok(`{"n":${calls}}`), txHash: FAKE_TX };
+  }, () => t);
+  // Live fetch.
+  const r1 = await f.get("azuki");
+  assert.equal(r1.txHash, FAKE_TX);
+  // Cache hit — no hash.
+  const r2 = await f.get("azuki");
+  assert.equal(r2.txHash, null);
+  // Expire the cache and reload.
+  t = CACHE_TTL_MS + 1;
+  const r3 = await f.get("azuki");
+  assert.equal(r3.txHash, FAKE_TX); // fresh live fetch again
+  assert.equal(calls, 2);
 });
