@@ -54,11 +54,13 @@ After restarting Claude Desktop:
 1. Open a new conversation.
 2. To make sure Claude selects the right server when you have multiple MCP servers configured, start with an explicit request:
 
-   > Use the NFT Data MCP server to look up an NFT collection.
+   > Use the NFT Data MCP server.
 
-3. When Claude asks for a collection slug, enter:
+3. When Claude asks for a collection slug, enter an example slug such as:
 
-   > Azuki
+   > `azuki`
+
+   You can use the slug of any existing NFT collection instead.
 
 4. Continue with natural follow-up questions. If Claude does not use the NFT Data server, ask it explicitly to do so.
 
