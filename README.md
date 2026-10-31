@@ -1,6 +1,12 @@
-# nftdata-mcp
+# NFT Data MCP
 
-An MCP server that exposes the [NFT Data](https://www.nftdata.app/) API to AI clients such as Claude Desktop as a single tool: `get_collection_data`. Each API request is paid automatically with **$0.002 in USDC on Base** via the [x402](https://docs.x402.org/) protocol.
+A multichain NFT data MCP server that gives AI assistants, agents, and other MCP-compatible clients access to the [NFT Data API](https://www.nftdata.app/) through a single tool: `get_collection_data`.
+
+Compatible with Claude Desktop and other MCP-compatible applications, AI agents, and clients, including future clients that support the Model Context Protocol (MCP).
+
+Each API request is paid automatically at **$0.002 in USDC on Base** using the [x402 payment protocol](https://docs.x402.org/).
+
+Retrieve NFT collection data across 30+ blockchain networks through the NFT Data API's OpenSea integration, including Ethereum, Base, Ink, Arc, HyperEVM, Robinhood Chain, Solana, and more.
 
 - **npm:** https://www.npmjs.com/package/nftdata-mcp
 - **MCP Registry:** https://registry.modelcontextprotocol.io/?q=nftdata
@@ -163,7 +169,7 @@ Verify on BaseScan: https://basescan.org/tx/0x4fb35acc31a9f6841647ca2533a7f9ac71
 
 | Product | Payment Protocols | Payment Networks |
 |---|---|---|
-| NFT Data (website/API) | x402 and MPP | x402 — Base and Solana; MPP — Base |
+| NFT Data (website/API) | x402 and MPP | x402 - Base and Solana; MPP - Base |
 | NFT Data (MCP server) | x402 | Base |
 
 > **Note:** The NFT Data website/API and the NFT Data MCP server have different payment capabilities. The MCP server currently supports x402 payments on Base only; MPP support is not implemented in this package.
@@ -204,7 +210,7 @@ This server supports **x402 on Base only**. Solana and MPP payment methods are n
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `EVM_PRIVATE_KEY` | yes | — | Private key (`0x` + 64 hex chars) of the wallet that pays for calls |
+| `EVM_PRIVATE_KEY` | yes | - | Private key (`0x` + 64 hex chars) of the wallet that pays for calls |
 | `NFTDATA_MAX_REQUESTS` | no | `100` | Max signed payments per session. Integer 1–1000; any other value stops startup with an error |
 | `NFTDATA_TIMEOUT_MS` | no | `15000` | Request timeout in milliseconds (1000–60000) |
 | `NFTDATA_URL` | no | `https://www.nftdata.app/api/get-collection-data` | Accepts only the official NFT Data endpoint; anything else stops startup |
