@@ -32,7 +32,7 @@ Add the following block to `claude_desktop_config.json` (usually found in `~/Lib
   "mcpServers": {
     "nftdata": {
       "command": "npx",
-      "args": ["-y", "nftdata-mcp@1.0.2"],
+      "args": ["-y", "nftdata-mcp@1.0.3"],
       "env": {
         "EVM_PRIVATE_KEY": "YOUR_EVM_PRIVATE_KEY"
       }
