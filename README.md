@@ -168,7 +168,7 @@ Verify on BaseScan: https://basescan.org/tx/0x4fb35acc31a9f6841647ca2533a7f9ac71
 
 > **Note:** The NFT Data website/API and the NFT Data MCP server have different payment capabilities. The MCP server currently supports x402 payments on Base only; MPP support is not implemented in this package.
 
-**Data network** refers to the blockchain where an NFT collection lives. `nftdata-mcp` retrieves collection data through the NFT Data API's OpenSea integration. Collections exist on various chains, such as Ethereum, Base, or Solana.
+**Data network** refers to the blockchain where an NFT collection exists. NFT Data is a multichain service supporting NFT collections across **30+ blockchain networks** through the NFT Data API's OpenSea integration, including Ethereum, Base, Ink, Arc, HyperEVM, Robinhood Chain, and Solana, among others. OpenSea continues to expand its supported blockchain networks, so coverage may grow over time. The data network is independent of the payment network used to pay for API requests.
 
 **Payment network** refers to the blockchain used to pay for each API request. This server pays on **Base mainnet only**, using USDC via x402, regardless of which chain the queried collection is on.
 
