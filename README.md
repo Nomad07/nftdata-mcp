@@ -36,7 +36,7 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "nftdata": {
       "command": "npx",
-      "args": ["-y", "nftdata-mcp"],
+      "args": ["-y", "nftdata-mcp@1.0.1"],
       "env": {
         "EVM_PRIVATE_KEY": "0x..."
       }
@@ -45,7 +45,11 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
-Restart Claude Desktop, then ask for example: "What is the floor price and 7-day volume of azuki?"
+Restart Claude Desktop. You can ask by collection name or OpenSea slug and Claude will retrieve the latest collection statistics, including floor price, sales volume, owner count, supply, and lifetime metrics. Each successful request includes a payment transaction hash and a BaseScan link so you can verify the payment on-chain.
+
+Example prompt:
+
+> Azuki
 
 ## Run from source
 
