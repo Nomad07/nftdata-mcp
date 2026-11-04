@@ -4,6 +4,8 @@ A multichain NFT data MCP server that gives AI assistants, agents, and other MCP
 
 Compatible with Claude Desktop and other MCP-compatible applications, AI agents, and clients, including future clients that support the Model Context Protocol (MCP).
 
+[![NFT Data MCP server](https://mcprush.com/badge/nftdata-mcp/card.svg)](https://mcprush.com/to/nftdata-mcp?ref=badge)
+
 Each API request is paid automatically at **$0.002 in USDC on Base** using the [x402 payment protocol](https://docs.x402.org/).
 
 Retrieve NFT collection data across 30+ blockchain networks through the NFT Data API's OpenSea integration, including Ethereum, Base, Ink, Arc, HyperEVM, Robinhood Chain, Solana, and more.
