@@ -23,6 +23,11 @@
           "isSecret": true
         },
         {
+          "name": "NFTDATA_PAYMENT_PROTOCOL",
+          "description": "Payment protocol: x402 (default when unset or empty) or mpp. Both pay $0.002 in USDC on Base. Any other value stops startup.",
+          "isRequired": false
+        },
+        {
           "name": "NFTDATA_MAX_REQUESTS",
           "description": "Maximum signed payments per session (integer 1-1000, default 100).",
           "isRequired": false

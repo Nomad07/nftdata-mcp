@@ -22,13 +22,14 @@
   "scripts": {
     "build": "tsc",
     "start": "tsx server.ts",
-    "test": "tsx --test lib.test.ts",
+    "test": "tsx --test lib.test.ts test/mpp-lib.test.ts test/mpp-retry.test.ts test/payment-path.test.ts",
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@x402/evm": "^2.5.0",
     "@x402/fetch": "^2.5.0",
+    "mppx": "0.17.5",
     "viem": "^2.0.0",
     "zod": "^3.23.0"
   },

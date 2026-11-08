@@ -84,7 +84,15 @@ client
 // when a hook returns { recovered: true }).  Leaving it unregistered ensures at most
 // one payment-creation attempt per tool call, which is this server's "no retries" policy.
 
-const payFetch = wrapFetchWithPayment(fetch, client);
+const x402PayFetch = wrapFetchWithPayment(fetch, client);
+
+// Exactly one payment protocol is selected here, once, before any request is made
+// (NFTDATA_PAYMENT_PROTOCOL; parseConfig has already rejected invalid values). There is no
+// fallback: in "x402" mode mppx is never loaded, in "mpp" mode x402PayFetch is never called.
+const mpp = config.protocol === "mpp" ? await import("./mpp.js") : null;
+const payFetch = mpp
+  ? mpp.createMppFetch({ account, limiter, maxRequests: config.maxRequests })
+  : x402PayFetch;
 
 async function load(slug: string): Promise<LoadResult> {
   try {
@@ -101,11 +109,13 @@ async function load(slug: string): Promise<LoadResult> {
         // Extract the payment response header before consuming the body.
         const paymentHeader =
           r.headers.get("PAYMENT-RESPONSE") ?? r.headers.get("X-PAYMENT-RESPONSE");
+        const mppReceiptHeader = r.headers.get("Payment-Receipt");
         return {
           status: r.status,
           body: await r.text(),
           retryAfter: r.headers.get("Retry-After"),
           paymentHeader,
+          mppReceiptHeader,
         };
       },
       config.timeoutMs,
@@ -115,7 +125,10 @@ async function load(slug: string): Promise<LoadResult> {
     // Any failure (malformed header, missing field, wrong format) is silently
     // ignored — the collection result is still returned without payment info.
     let txHash: string | null = null;
-    if (!result.isError && res.paymentHeader) {
+    if (mpp && !result.isError) {
+      // MPP mode reads only the MPP receipt; the x402 header is ignored.
+      txHash = mpp.readMppTxHash(res.mppReceiptHeader);
+    } else if (!result.isError && res.paymentHeader) {
       try {
         const settle = decodePaymentResponseHeader(res.paymentHeader);
         txHash = validateTxHash(settle.transaction);
@@ -137,7 +150,7 @@ server.tool(
   "get_collection_data",
   "Get OpenSea NFT collection market data in one call: name, contracts, floor price, " +
     "1/7/30-day and lifetime sales and volume, unique owners, total supply, creation date. " +
-    "Costs $0.002 per call (x402). " +
+    "Costs $0.002 per call (x402 or MPP, USDC on Base). " +
     "`collection` is the OpenSea slug from the collection URL: opensea.io/collection/<slug> " +
     "(e.g. 'azuki', 'basedpunks'); it is trimmed and lowercased. " +
     "Prices are in the currency given in the *_currency fields (ETH, USDC, HYPE...).",

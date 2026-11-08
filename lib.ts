@@ -18,10 +18,16 @@ export const DEFAULT_TIMEOUT_MS = 15_000;
 export const CACHE_TTL_MS = 5 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 500;
 
+export type PaymentProtocol = "x402" | "mpp";
+export const DEFAULT_PROTOCOL: PaymentProtocol = "x402";
+
 export interface Config {
   endpoint: string;
   maxRequests: number;
   timeoutMs: number;
+  // Fixed for the whole process. Exactly one payment protocol is ever used; there is no
+  // fallback from one to the other.
+  protocol: PaymentProtocol;
 }
 
 function parseIntStrict(name: string, raw: string, min: number, max: number): number {
@@ -52,6 +58,16 @@ export function resolveEndpoint(override: string | undefined): string {
   return normalized;
 }
 
+// NFTDATA_PAYMENT_PROTOCOL: unset or empty selects x402 (the default). "mpp" selects MPP.
+// Anything else (including lists such as "x402,mpp" or "auto") is rejected at startup so a
+// misconfiguration can never lead to a guessed protocol.
+export function parseProtocol(raw: string | undefined): PaymentProtocol {
+  if (raw === undefined || raw.trim() === "") return DEFAULT_PROTOCOL;
+  const v = raw.trim().toLowerCase();
+  if (v === "x402" || v === "mpp") return v;
+  throw new Error("NFTDATA_PAYMENT_PROTOCOL must be 'x402' or 'mpp'");
+}
+
 export function parseConfig(env: Record<string, string | undefined>): Config {
   const maxRaw = env.NFTDATA_MAX_REQUESTS;
   const timeoutRaw = env.NFTDATA_TIMEOUT_MS;
@@ -65,6 +81,7 @@ export function parseConfig(env: Record<string, string | undefined>): Config {
       timeoutRaw === undefined || timeoutRaw.trim() === ""
         ? DEFAULT_TIMEOUT_MS
         : parseIntStrict("NFTDATA_TIMEOUT_MS", timeoutRaw, 1000, 60_000),
+    protocol: parseProtocol(env.NFTDATA_PAYMENT_PROTOCOL),
   };
 }
 
@@ -100,6 +117,51 @@ export function validateRequirements(req: Requirements): string | null {
     return "invalid payment recipient";
   }
   if (req.payTo.toLowerCase() !== OFFICIAL_PAY_TO) return "unexpected payment recipient";
+  return null;
+}
+
+// Shape of an MPP challenge as delivered by the mppx client (WWW-Authenticate: Payment).
+// Native EVM charge challenges carry { amount, currency, recipient, methodDetails: {...} }.
+// Challenges synthesized from an x402 PAYMENT-REQUIRED header have an "x402:" id and a
+// request with scheme/network fields; those are never accepted in MPP mode.
+export interface MppChallengeLike {
+  id: string;
+  method: string;
+  intent: string;
+  request: Record<string, unknown>;
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+// Returns a refusal reason, or null if the MPP challenge is acceptable. Mirrors
+// validateRequirements: Base mainnet, USDC, exactly 2000 atomic units, official recipient.
+export function validateMppChallenge(challenge: MppChallengeLike): string | null {
+  if (!isObject(challenge)) return "unexpected payment challenge";
+  if (challenge.method !== "evm" || challenge.intent !== "charge") return "unexpected payment method";
+  if (typeof challenge.id !== "string" || challenge.id.startsWith("x402:")) return "unexpected payment method";
+  const req = challenge.request;
+  if (!isObject(req)) return "unexpected payment challenge";
+  if ("scheme" in req || "network" in req) return "unexpected payment method";
+  const details = req.methodDetails;
+  if (!isObject(details)) return "unexpected payment challenge";
+  if (details.chainId !== 8453) return "unexpected payment network";
+  if (details.decimals !== 6) return "unexpected payment token";
+  if (!Array.isArray(details.credentialTypes) || !details.credentialTypes.includes("authorization")) {
+    return "unexpected payment credential type";
+  }
+  if (details.splits !== undefined && !(Array.isArray(details.splits) && details.splits.length === 0)) {
+    return "payment splits are not accepted";
+  }
+  if (typeof req.currency !== "string" || req.currency.toLowerCase() !== USDC_BASE.toLowerCase()) {
+    return "unexpected payment token";
+  }
+  if (typeof req.amount !== "string" || !/^\d+$/.test(req.amount)) return "invalid payment amount";
+  if (BigInt(req.amount) !== EXACT_AMOUNT_ATOMIC) return "payment amount does not match the expected price";
+  if (typeof req.recipient !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(req.recipient)) {
+    return "invalid payment recipient";
+  }
+  if (req.recipient.toLowerCase() !== OFFICIAL_PAY_TO) return "unexpected payment recipient";
   return null;
 }
 

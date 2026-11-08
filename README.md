@@ -6,7 +6,7 @@ Compatible with Claude Desktop and other MCP-compatible applications, AI agents,
 
 [![NFT Data MCP server](https://mcprush.com/badge/nftdata-mcp/card.svg)](https://mcprush.com/to/nftdata-mcp?ref=badge)
 
-Each API request is paid automatically at **$0.002 in USDC on Base** using the [x402 payment protocol](https://docs.x402.org/).
+Each API request is paid automatically at **$0.002 in USDC on Base** using the [x402 payment protocol](https://docs.x402.org/) (default) or, when you select it, the [Machine Payments Protocol (MPP)](https://mpp.dev/).
 
 Retrieve NFT collection data across 30+ blockchain networks through the NFT Data API's OpenSea integration, including Ethereum, Base, Ink, Arc, HyperEVM, Robinhood Chain, Solana, and more.
 
@@ -174,13 +174,13 @@ Verify on BaseScan: https://basescan.org/tx/0x4fb35acc31a9f6841647ca2533a7f9ac71
 | Product | Payment Protocols | Payment Networks |
 |---|---|---|
 | NFT Data (website/API) | x402 and MPP | x402 - Base and Solana; MPP - Base |
-| NFT Data (MCP server) | x402 | Base |
+| NFT Data (MCP server) | x402 (default) or MPP, selected with `NFTDATA_PAYMENT_PROTOCOL` | x402 - Base; MPP - Base |
 
-> **Note:** The NFT Data website/API and the NFT Data MCP server have different payment capabilities. The MCP server currently supports x402 payments on Base only; MPP support is not implemented in this package.
+> **Note:** The NFT Data website/API and the NFT Data MCP server have different payment capabilities. The MCP server pays on Base only, with one protocol per run (x402 by default, MPP if you set `NFTDATA_PAYMENT_PROTOCOL=mpp`). Solana is not supported by the MCP server.
 
 **Data network** refers to the blockchain where an NFT collection exists. NFT Data is a multichain service supporting NFT collections across **30+ blockchain networks** through the NFT Data API's OpenSea integration, including Ethereum, Base, Ink, Arc, HyperEVM, Robinhood Chain, and Solana, among others. OpenSea continues to expand its supported blockchain networks, so coverage may grow over time. The data network is independent of the payment network used to pay for API requests.
 
-**Payment network** refers to the blockchain used to pay for each API request. This server pays on **Base mainnet only**, using USDC via x402, regardless of which chain the queried collection is on.
+**Payment network** refers to the blockchain used to pay for each API request. This server pays on **Base mainnet only**, using USDC via x402 or MPP, regardless of which chain the queried collection is on.
 
 ---
 
@@ -206,7 +206,25 @@ Payment: 0x...
 Verify: https://basescan.org/tx/0x...
 ```
 
-This server supports **x402 on Base only**. Solana and MPP payment methods are not implemented.
+This server supports **x402 and MPP on Base only**. Solana payments are not implemented.
+
+### MPP mode
+
+Set `NFTDATA_PAYMENT_PROTOCOL=mpp` to pay with MPP (EVM charge, USDC on Base) instead of x402:
+
+```json
+"env": {
+  "EVM_PRIVATE_KEY": "YOUR_EVM_PRIVATE_KEY",
+  "NFTDATA_PAYMENT_PROTOCOL": "mpp"
+}
+```
+
+- The protocol is chosen once at startup and never changes during a run. The server **never falls back** from one protocol to the other: if the API does not offer an acceptable payment in the selected protocol, nothing is signed and the call fails.
+- Unset or empty selects x402. Only `x402` and `mpp` are accepted; any other value (for example `auto` or `x402,mpp`) stops startup with an error.
+- The same validation applies before signing: Base mainnet, USDC, exactly 2000 atomic units ($0.002), and the official recipient. Payment splits are refused.
+- At most one payment credential is signed per tool call. A repeated 402 after payment is not retried.
+- The spend limit, 5-minute cache and de-duplication of concurrent identical calls work the same way in both modes.
+- MPP payments use the same wallet (`EVM_PRIVATE_KEY`) and the same USDC balance on Base.
 
 ---
 
@@ -216,6 +234,7 @@ This server supports **x402 on Base only**. Solana and MPP payment methods are n
 |---|---|---|---|
 | `EVM_PRIVATE_KEY` | yes | - | Private key (`0x` + 64 hex chars) of the wallet that pays for calls |
 | `NFTDATA_MAX_REQUESTS` | no | `100` | Max signed payments per session. Integer 1–1000; any other value stops startup with an error |
+| `NFTDATA_PAYMENT_PROTOCOL` | no | `x402` | Payment protocol: `x402` or `mpp`. Unset or empty selects x402; any other value stops startup with an error |
 | `NFTDATA_TIMEOUT_MS` | no | `15000` | Request timeout in milliseconds (1000–60000) |
 | `NFTDATA_URL` | no | `https://www.nftdata.app/api/get-collection-data` | Accepts only the official NFT Data endpoint; anything else stops startup |
 
@@ -286,7 +305,7 @@ To use a local checkout with Claude Desktop, set `"command": "npx"` and `"args":
 
 ```bash
 npm run build   # compiles to dist/
-npm test        # offline unit tests, no network and no payments
+npm test        # offline tests (mocked API), no network and no real payments
 ```
 
 ---
@@ -305,7 +324,7 @@ npm test        # offline unit tests, no network and no payments
 
 ## Limitations
 
-- Only x402 on Base mainnet is supported for payments. Solana and MPP are not implemented.
+- Only x402 and MPP on Base mainnet are supported for payments. Solana is not implemented.
 - The expected recipient address is hardcoded. If the NFT Data payout address changes, update `OFFICIAL_PAY_TO` in `lib.ts` and release a new version.
-- The payment hook depends on the installed `@x402/*` SDK and is not covered by the offline unit tests.
+- The payment paths depend on the installed `@x402/*` and `mppx` SDKs. `npm test` exercises them against a mocked API (no real payments).
 - The x402 SDK changes quickly. If imports fail, check the [x402 docs](https://docs.x402.org/).
