@@ -1,3 +1,5 @@
+![NFT Data MCP Server](https://raw.githubusercontent.com/Nomad07/nftdata-mcp/main/assets/nftdata-mcp-banner.png)
+
 # NFT Data MCP
 
 A multichain NFT data MCP server that gives AI assistants, agents, and other MCP-compatible clients access to the [NFT Data API](https://www.nftdata.app/) through a single tool: `get_collection_data`.
