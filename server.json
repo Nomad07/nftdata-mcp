@@ -1,17 +1,17 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.Nomad07/nftdata-mcp",
-  "description": "OpenSea NFT collection data via NFT Data API, paid per request with x402.",
+  "description": "OpenSea NFT data, paid per request in USDC on Base via x402 (default) or MPP.",
   "repository": {
     "url": "https://github.com/Nomad07/nftdata-mcp",
     "source": "github"
   },
-  "version": "1.0.3",
+  "version": "1.1.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "nftdata-mcp",
-      "version": "1.0.3",
+      "version": "1.1.0",
       "transport": {
         "type": "stdio"
       },

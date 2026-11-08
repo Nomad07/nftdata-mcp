@@ -34,7 +34,7 @@ Add the following block to `claude_desktop_config.json` (usually found in `~/Lib
   "mcpServers": {
     "nftdata": {
       "command": "npx",
-      "args": ["-y", "nftdata-mcp@1.0.3"],
+      "args": ["-y", "nftdata-mcp@1.1.0"],
       "env": {
         "EVM_PRIVATE_KEY": "YOUR_EVM_PRIVATE_KEY"
       }
@@ -56,7 +56,7 @@ After restarting Claude Desktop:
 1. Open a new conversation.
 2. To make sure Claude selects the right server when you have multiple MCP servers configured, start with an explicit request:
 
-   > Use the NFT Data MCP server.
+   > Use the NFT Data MCP server
 
 3. When Claude asks for a collection slug, enter an example slug such as:
 
@@ -66,7 +66,7 @@ After restarting Claude Desktop:
 
 4. Continue with natural follow-up questions. If Claude does not use the NFT Data server, ask it explicitly to do so.
 
-You can also ask directly by collection name or OpenSea slug. Claude will retrieve the latest collection statistics, including floor price, sales volume, owner count, supply, and lifetime metrics. Each successful request includes a payment transaction hash and a BaseScan verification link.
+You can also ask directly by collection name or OpenSea slug. Claude will retrieve the latest collection statistics, including floor price, sales volume, owner count, supply, and lifetime metrics. Each newly paid successful request includes a payment transaction hash and a BaseScan verification link. Cached responses do not, because no new payment is made.
 
 ---
 
@@ -167,8 +167,6 @@ Verify on BaseScan: https://basescan.org/tx/0x4fb35acc31a9f6841647ca2533a7f9ac71
 
 ---
 
-## Data networks vs. payment network
-
 ### Payment Protocols and Supported Networks
 
 | Product | Payment Protocols | Payment Networks |
@@ -199,12 +197,14 @@ Each request is paid automatically using the [x402 protocol](https://docs.x402.o
 4. If everything matches, the wallet signs and submits the payment.
 5. The API fulfills the request and returns the collection data along with the on-chain transaction hash.
 
-Every successful response includes:
+Every newly paid successful request includes:
 
 ```
 Payment: 0x...
 Verify: https://basescan.org/tx/0x...
 ```
+
+A cache hit (the same collection requested again within 5 minutes) is served without a new payment, so it does not include these lines.
 
 This server supports **x402 and MPP on Base only**. Solana payments are not implemented.
 

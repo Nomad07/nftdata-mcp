@@ -1,7 +1,7 @@
 {
   "name": "nftdata-mcp",
-  "version": "1.0.3",
-  "description": "MCP server for the NFT Data API: OpenSea collection market data, paid per call via x402",
+  "version": "1.1.0",
+  "description": "MCP server for the NFT Data API: OpenSea collection market data, paid per call in USDC on Base via x402 (default) or MPP (selected with NFTDATA_PAYMENT_PROTOCOL)",
   "mcpName": "io.github.Nomad07/nftdata-mcp",
   "type": "module",
   "license": "MIT",

@@ -144,7 +144,7 @@ async function load(slug: string): Promise<LoadResult> {
 
 const fetcher = new CachedFetcher(load);
 
-const server = new McpServer({ name: "nftdata", version: "1.0.3" });
+const server = new McpServer({ name: "nftdata", version: "1.1.0" });
 
 server.tool(
   "get_collection_data",
