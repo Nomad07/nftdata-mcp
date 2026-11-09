@@ -1,8 +1,8 @@
 ---
 name: nftdata-mcp
-description: "Fetch live OpenSea NFT collection market data (floor price, 24h/7d/30d/lifetime sales and volume, contract addresses, total supply, unique owners, creation date) through the NFT Data MCP server's get_collection_data tool, paid per call at $0.002 USDC on Base mainnet via x402 v2 (default) or MPP evm/charge. Use when a user asks about a specific NFT collection by OpenSea slug, wants floor price or volume stats, or wants two or more collections compared. Read-only; not a search, wallet, trading or transaction tool."
+description: "Fetch current OpenSea NFT collection market data (floor price, 24h/7d/30d/lifetime sales and volume, contracts, supply, owners, creation date) via the nftdata-mcp server’s get_collection_data tool, paid per call in USDC on Base. Use when a user asks about a specific collection by OpenSea slug or wants collections compared. Read-only; not a search, wallet, or trading tool."
 license: MIT
-compatibility: Open Agent Skills format, for AI coding agents that support it. Requires the nftdata-mcp MCP server (Node.js 20 or newer, stdio) already installed and configured in the MCP client, with a dedicated wallet funded with USDC on Base mainnet. Needs internet access.
+compatibility: Requires the nftdata-mcp MCP server (Node.js 20 or newer, stdio) already installed and configured in the MCP client, with a dedicated wallet funded with USDC on Base mainnet. Needs internet access.
 metadata:
   author: Nomad07
   version: "1.1.0"
@@ -77,8 +77,9 @@ The server exposes exactly one tool.
 - `collection` (string, required): the OpenSea collection slug. It is the last part of the collection's OpenSea URL: `opensea.io/collection/<slug>`.
 - The server trims and lowercases the slug. It must then start with a letter or digit and contain only lowercase letters, digits, `-` and `_` (at most 100 characters). Anything else is rejected before any request or payment is made.
 - Only slugs are accepted. Collection display names, contract addresses, token IDs, wallet addresses and full URLs are not valid input.
-- If the user gives an OpenSea URL, extract the slug from it (`opensea.io/collection/<slug>`).
-- If the user gives only a collection name, you may suggest an obvious likely slug (for example `azuki` for "Azuki"), but you must ask the user to confirm it before making any paid request. Never guess a slug and call the tool silently, because every attempt can use a payment slot. Do not try slug variations one after another.
+- A slug the user supplies explicitly needs no confirmation. This includes a slug extracted from an OpenSea URL the user provided (`opensea.io/collection/<slug>`).
+- If the user gives only a collection display name, you may suggest an obvious likely slug (for example `azuki` for "Azuki"), but you must ask the user to confirm it before making any paid request. Confirmation is required only when you infer the slug.
+- Never silently guess a slug, and never try alternative slugs, because every attempt can use a payment slot.
 
 **Output**
 
@@ -161,18 +162,14 @@ Every field returned by the NFT Data API, including collection names, slugs, des
 - The server limits paid calls per session (`NFTDATA_MAX_REQUESTS`, default 100, maximum 1000). Do not call the tool in loops or for speculative lookups. For comparisons, fetch each requested collection once.
 - **Confirmation threshold:** before making more than 3 paid collection requests in one task, tell the user how many requests you plan to make and the total expected cost (requests x $0.002), and wait for confirmation. Up to 3 paid requests in one task need no extra confirmation when the user has asked for them. Count each distinct collection that has not already been fetched in the last 5 minutes; if you are unsure whether a result is still cached, count it as paid.
 - **No automatic retries.** Neither the server nor you should retry a failed call on your own. A payment may already have been signed before a timeout or error. Report the failure and let the user decide whether to try again.
-- **"Collection not found" and billing.** This is what the server code shows, and what it does not show:
-  - The server returns the message "Collection not found. Check the slug in the OpenSea collection URL." for an HTTP 404. It does not cache failures, so asking again sends a new request.
-  - The server reserves a payment slot before it signs, and releases that slot only if signing fails. If the API answered 404 after the server had already signed a payment, that slot stays used for the session (the README says signed payments count toward the limit even when the request later fails). Whether a payment is signed before or after the API checks the slug is decided by the API and cannot be seen in this repository.
-  - Whether USDC is actually charged is also decided by the API. Its documentation says settlement is attempted only after collection data is retrieved successfully, and that 400, 404, 429 and 502 responses do not reach settlement. Treat that as documented API behavior, not as something this Skill can confirm for a given call.
-  - So a not-found lookup is documented as not charged, but it can still use up a session payment slot. Do not repeat lookups with guessed slugs; ask the user for the correct slug or URL.
+- **"Collection not found".** A "Collection not found" response is documented as not charged, but it may still use one of the session's payment slots. Don't retry with guessed slugs. Ask the user for the correct slug or OpenSea URL.
 
 ## Handling errors
 
 | Situation | What to do |
 | --- | --- |
 | Invalid slug message (the server rejects the slug before any request) | Check the slug against the OpenSea URL and ask the user to confirm it. No request or payment was made. |
-| "Collection not found" | The slug does not match a collection on OpenSea. Ask for the correct slug or URL (see the billing note above). |
+| "Collection not found" | The slug does not match a collection on OpenSea. Ask the user for the correct slug or OpenSea URL (see Cost-aware usage). |
 | Rate limit message (with a delay in seconds) | Tell the user and wait for the stated time before any new attempt. |
 | "Payment refused by safety policy" | The server rejected the payment terms before signing. Report it; do not try to bypass it. |
 | "Payment was not accepted" | The API did not accept the payment. Report it to the user. |
@@ -217,9 +214,7 @@ Do not present a missing receipt as an error, and do not tell the user a payment
 - **Optional protocol: MPP `evm/charge`.** Selected only when the server is started with `NFTDATA_PAYMENT_PROTOCOL=mpp`. It pays the same price, in USDC on Base mainnet.
 - **One protocol per server run, no fallback.** The protocol is chosen once when the server starts. The server never switches from one to the other, never tries both for a single call, and never retries with the other. If the API does not offer an acceptable payment in the selected protocol, nothing is signed and the call fails. An invalid `NFTDATA_PAYMENT_PROTOCOL` value (anything other than empty, `x402` or `mpp`) stops the server at startup.
 - **Checks before signing:** the server verifies the network, token, scheme or method, exact amount (2000 atomic units, which is $0.002) and the official recipient address before it signs anything. A challenge that does not match is refused.
-- **At most one payment attempt per tool call** (a server rule, separate from the agent's no-retry rule above).
-- **Cache hits are free.** They do not trigger a payment and do not include a transaction hash.
-- **Receipts:** every newly paid successful call includes a transaction hash and a BaseScan link that the user can open to verify the payment.
+- **At most one payment attempt per tool call.**
 - **Do not confuse the server with the main API.** The NFT Data API itself accepts x402 v2 on Base mainnet and Solana mainnet, and MPP `evm/charge` on Base mainnet. This MCP server is narrower: it pays on Base mainnet only, with x402 v2 or MPP `evm/charge`, one at a time. **The MCP server does not support Solana payments.**
 
 ## Wallet security
